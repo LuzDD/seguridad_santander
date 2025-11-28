@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Prueba API Seguridad Santander</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 1.5rem;
+      background: #0f172a;
+      color: #e5e7eb;
+    }
+    h1 {
+      margin-bottom: 0.5rem;
+    }
+    .card {
+      background: #020617;
+      padding: 1rem 1.5rem;
+      border-radius: 0.75rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.35);
+    }
+    label {
+      display: block;
+      font-size: 0.9rem;
+      margin-bottom: 0.25rem;
+    }
+    select, input {
+      padding: 0.35rem 0.5rem;
+      border-radius: 0.4rem;
+      border: 1px solid #4b5563;
+      background: #020617;
+      color: #e5e7eb;
+      margin-right: 0.5rem;
+      min-width: 120px;
+    }
+    button {
+      padding: 0.45rem 0.9rem;
+      border-radius: 0.5rem;
+      border: none;
+      cursor: pointer;
+      background: #2563eb;
+      color: white;
+      font-weight: 500;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: flex-end;
+      margin-bottom: 1rem;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 0.85rem;
+      margin-top: 0.75rem;
+    }
+    th, td {
+      border: 1px solid #1f2937;
+      padding: 0.4rem 0.5rem;
+      text-align: left;
+    }
+    th {
+      background: #111827;
+    }
+    .badge {
+      padding: 0.05rem 0.4rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge.BAJO {
+      background: #16a34a33;
+      color: #4ade80;
+    }
+    .badge.MEDIO {
+      background: #facc1533;
+      color: #fde68a;
+    }
+    .badge.ALTO {
+      background: #dc262633;
+      color: #fca5a5;
+    }
+    #status {
+      font-size: 0.8rem;
+      margin-top: 0.5rem;
+      color: #9ca3af;
+    }
+    pre {
+      background: #020617;
+      padding: 0.75rem;
+      border-radius: 0.5rem;
+      font-size: 0.75rem;
+      overflow: auto;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Prueba de filtros contra la API</h1>
+  <p>Este mini frontend llama al endpoint <code>/riesgo_municipios</code> de tu API.</p>
+
+  <div class="card">
+    <h2>Riesgo por municipio</h2>
+
+    <div class="filters">
+      <div>
+        <label for="anio">Año</label>
+        <input type="number" id="anio" value="2020" min="2010" max="2030" />
+      </div>
+
+      <div>
+        <label for="categoria">Tipo de delito</label>
+        <select id="categoria">
+          <option value="HURTO">HURTO</option>
+          <option value="VIOLENCIA_INTRAFAMILIAR">VIOLENCIA_INTRAFAMILIAR</option>
+          <option value="DELITOS_SEXUALES">DELITOS_SEXUALES</option>
+          <option value="">(Todos)</option>
+        </select>
+      </div>
+
+      <div>
+        <label>&nbsp;</label>
+        <button id="btnBuscar">Buscar riesgo</button>
+      </div>
+    </div>
+
+    <div id="status"></div>
+
+    <table id="tablaResultados" style="display:none;">
+      <thead>
+        <tr>
+          <th>Municipio</th>
+          <th>Año</th>
+          <th>Mes</th>
+          <th>Categoría</th>
+          <th>Nivel riesgo</th>
+          <th>Score</th>
+          <th>Observados</th>
+          <th>Esperados</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <details style="margin-top:1rem;">
+      <summary>Ver JSON crudo</summary>
+      <pre id="debugJson">{}</pre>
+    </details>
+  </div>
+
+  <script>
+    // 👉 CAMBIA ESTA URL SI TU API NO ES LOCAL
+    const API_BASE = "http://127.0.0.1:8000";
+
+    async function apiGet(path, params = {}) {
+      const url = new URL(API_BASE + path);
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== "") {
+          url.searchParams.set(key, value);
+        }
+      });
+
+      const res = await fetch(url.toString());
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`HTTP ${res.status}: ${text}`);
+      }
+      return res.json();
+    }
+
+    const btnBuscar = document.getElementById("btnBuscar");
+    const statusEl = document.getElementById("status");
+    const tabla = document.getElementById("tablaResultados");
+    const tbody = tabla.querySelector("tbody");
+    const debugJson = document.getElementById("debugJson");
+
+    btnBuscar.addEventListener("click", async () => {
+      const anio = document.getElementById("anio").value;
+      const categoria = document.getElementById("categoria").value;
+
+      statusEl.textContent = "Consultando API...";
+      btnBuscar.disabled = true;
+      tabla.style.display = "none";
+      tbody.innerHTML = "";
+      debugJson.textContent = "{}";
+
+      try {
+        // Llamamos al endpoint /riesgo_municipios
+        const data = await apiGet("/riesgo_municipios", {
+          anio: anio || undefined,
+          categoria: categoria || undefined,
+        });
+
+        console.log("Respuesta API:", data);
+        debugJson.textContent = JSON.stringify(data, null, 2);
+
+        const items = data.municipios || data || [];
+        if (!items.length) {
+          statusEl.textContent = "Sin resultados para esos filtros.";
+          return;
+        }
+
+        // Llenar la tabla
+        items.forEach((item) => {
+          const tr = document.createElement("tr");
+
+          const celdas = [
+            item.municipio,
+            item.anio,
+            item.mes,
+            item.categoria,
+            item.nivel_riesgo,
+            (item.riesgo_score ?? 0).toFixed(2),
+            item.delitos_observados,
+            item.delitos_esperados?.toFixed
+              ? item.delitos_esperados.toFixed(1)
+              : item.delitos_esperados
+          ];
+
+          celdas.forEach((valor, idx) => {
+            const td = document.createElement("td");
+            if (idx === 4) {
+              // nivel_riesgo con badge
+              const span = document.createElement("span");
+              span.textContent = valor || "-";
+              span.className = "badge " + (valor || "");
+              td.appendChild(span);
+            } else {
+              td.textContent = valor ?? "-";
+            }
+            tr.appendChild(td);
+          });
+
+          tbody.appendChild(tr);
+        });
+
+        tabla.style.display = "table";
+        statusEl.textContent = `Mostrando ${items.length} registros.`;
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = "Error llamando a la API: " + err.message;
+      } finally {
+        btnBuscar.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
